@@ -285,10 +285,12 @@ CloudFormation do
     }
   end
 
-  IAM_Role('Role') do
-    AssumeRolePolicyDocument service_role_assume_policy('ecs')
-    Path '/'
-    ManagedPolicyArns ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"]
+  unless awsvpc_enabled
+    IAM_Role('Role') do
+      AssumeRolePolicyDocument service_role_assume_policy('ecs')
+      Path '/'
+      ManagedPolicyArns ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"]
+    end
   end
 
   has_security_group = false
@@ -313,6 +315,22 @@ CloudFormation do
     desired_count = scaling_policy['min']
   elsif defined? desired
     desired_count = desired
+  end
+
+  if defined? service_discovery
+
+    ServiceDiscovery_Service(:ServiceRegistry) {
+      NamespaceId Ref(:NamespaceId)
+      Name service_discovery['name']  if service_discovery.has_key? 'name'
+      DnsConfig({
+        DnsRecords: [{
+          TTL: 60,
+          Type: 'A'
+        }],
+        RoutingPolicy: 'WEIGHTED'
+      })
+      HealthCheckConfig service_discovery['healthcheck'] if service_discovery.has_key? 'healthcheck'
+    }
   end
 
   ECS_Service('Service') do
@@ -340,6 +358,17 @@ CloudFormation do
         }
       })
     end
+
+    if defined? service_discovery
+      ServiceRegistries([
+        {
+          ContainerName: (service_discovery['container'] || targetgroup['container']),
+          ContainerPort: (service_discovery['port'] || targetgroup['port']),
+          RegistryArn: FnGetAtt(:ServiceRegistry, :Arn)
+        }
+      ])
+    end
+
   end if defined? task_definition
 
   if defined?(scaling_policy)
