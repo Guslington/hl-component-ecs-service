@@ -317,6 +317,8 @@ CloudFormation do
     desired_count = desired
   end
 
+  registry = {}
+
   if defined? service_discovery
 
     ServiceDiscovery_Service(:ServiceRegistry) {
@@ -331,6 +333,11 @@ CloudFormation do
       })
       HealthCheckConfig service_discovery['healthcheck'] if service_discovery.has_key? 'healthcheck'
     }
+
+    registry[:RegistryArn] = FnGetAtt(:ServiceRegistry, :Arn)
+    registry[:ContainerName] = service_discovery['container_name']
+    registry[:ContainerPort] = service_discovery['container_port'] if service_discovery.has_key? 'container_port'
+    registry[:Port] = service_discovery['port'] if service_discovery.has_key? 'port'
   end
 
   ECS_Service('Service') do
@@ -359,14 +366,8 @@ CloudFormation do
       })
     end
 
-    if defined? service_discovery
-      ServiceRegistries([
-        {
-          ContainerName: (service_discovery['container'] || targetgroup['container']),
-          ContainerPort: (service_discovery['port'] || targetgroup['port']),
-          RegistryArn: FnGetAtt(:ServiceRegistry, :Arn)
-        }
-      ])
+    unless registry.empty?
+      ServiceRegistries([registry])
     end
 
   end if defined? task_definition

@@ -32,8 +32,8 @@ task_definition:
 
 service_discovery:
   name: ninx
-  container: nginx
-  port: 80
+  container_name: nginx
+  container_port: 80
   healthcheck:
     Type: HTTP
     ResourcePath: /healthcheck
